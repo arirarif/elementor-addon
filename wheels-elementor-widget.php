@@ -6,8 +6,7 @@
  * Author: Ivan Kuraev
  * Author URI: https://t.me/ivankuraev
  * Text Domain: wheels-elementor-widgets
- * Requires PHP: 8.3
- * Requires at least: 6.8
+ * Requires at least: 5.0
  */
 
 if (!defined('ABSPATH')) {
@@ -21,24 +20,12 @@ define('WHEELS_ELEMENTOR_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('WHEELS_ELEMENTOR_PLUGIN_FILE', __FILE__);
 
 // Проверка совместимости
-if (!version_compare(PHP_VERSION, '8.3', '>=')) {
-    add_action('admin_notices', 'wheels_elementor_php_version_notice');
-} elseif (!did_action('elementor/loaded')) {
+if (!did_action('elementor/loaded')) {
     add_action('admin_notices', 'wheels_elementor_fallback_notice');
 } else {
     // Загрузка плагина
     require_once WHEELS_ELEMENTOR_PLUGIN_PATH . 'includes/class-plugin.php';
     Wheels_Elementor_Plugin::instance();
-}
-
-// Уведомление о версии PHP
-function wheels_elementor_php_version_notice() {
-    $message = sprintf(
-        esc_html__('Плагин "Wheels Elementor Widgets" требует PHP версии %1$s или выше. Текущая версия: %2$s.', 'wheels-elementor-widgets'),
-        '8.3',
-        PHP_VERSION
-    );
-    printf('<div class="notice notice-error"><p>%s</p></div>', $message);
 }
 
 // Уведомление, если Elementor не активирован
