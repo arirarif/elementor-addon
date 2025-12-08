@@ -1,0 +1,219 @@
+.wheels-hidden {
+    display: none !important;
+}
+
+.wheels-wrapper {
+/*     padding: 60px; */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-size: cover !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    min-height: 640px;
+}
+
+.wheels-block {
+    width: 100%;
+    max-width: 560px;
+    background-color: rgb(9, 33, 67);
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: flex-start;
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.wheels-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid #fcb900;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.wheels-type-container {
+    width: 100%;
+    padding: 1rem 0.5rem;
+    flex-direction: column;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.wheels-type-container:hover {
+    opacity: 0.8;
+    background-color: rgba(252, 185, 0, 0.3);
+}
+
+.wheels-active,
+.wheels-type-container:active {
+    opacity: 1;
+    background-color: #fcb900;
+}
+
+.wheels-type-container svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    fill: #FFFFFF;
+    color: #FFFFFF;
+}
+
+.wheels-type-title {
+    color: #FFFFFF;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0;
+    text-transform: uppercase;
+    text-align: center;
+}
+
+.wheels-container {
+    width: 100%;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.wheels-filters {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.wheels-info {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.wheels-info svg {
+    width: 6rem;
+    height: 6rem;
+    fill: #FFFFFF;
+    color: #FFFFFF;
+    opacity: 0.9;
+}
+
+.wheels-form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.wheels-param {
+    width: 100%;
+    display: flex;
+    align-items: stretch;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    border: 1px solid #fb0;
+}
+
+.wheels-param__label {
+    padding: 0.75rem 1rem;
+    min-width: 80px;
+    text-align: center;
+    color: #FFFFFF;
+    background-color: #fb0;
+    font-weight: 600;
+    font-size: 1rem;
+	text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+}
+
+.wheels-param__input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    color: #000000;
+    cursor: pointer;
+    background-color: #FFFFFF;
+    border: none;
+    outline: none;
+    font-size: 0.9rem;
+    min-width: 0;
+}
+
+.wheels-seasons {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid #fb0;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.wheels-seasons .wheels-type-container {
+    padding: 0.75rem 0.5rem;
+    flex: 1;
+}
+
+.wheels-footer {
+    width: 100%;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.wheels-button {
+    outline: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    width: 100%;
+    padding: 1rem 2rem;
+    border-radius: 2.5rem;
+    background: #fb0;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+}
+
+.wheels-button:hover {
+    opacity: 0.8;
+}
+
+.wheels-empty-state {
+    padding: 2rem;
+    text-align: center;
+    background: #f8f9fa;
+    color: #6c757d;
+}
+
+@media screen and (max-width: 768px) {
+    .wheels-block {
+        width: 90vw;
+    }
+    
+    .wheels-type-title {
+        font-size: 0.7rem;
+    }
+    
+    .wheels-container {
+        padding: 1rem;
+    }
+    
+    .wheels-wrapper {
+        min-height: 400px;
+        padding: 10px;
+    }
+}
