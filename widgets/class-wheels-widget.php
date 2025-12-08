@@ -519,9 +519,10 @@ class Wheels_Elementor_Widget extends \Elementor\Widget_Base {
             return [];
         }
 
+        // Get terms that have products assigned (hide_empty = true)
         $terms = get_terms([
             'taxonomy' => $attribute,
-            'hide_empty' => false,
+            'hide_empty' => true, // Only show terms that have products
             'orderby' => 'name',
             'order' => 'ASC'
         ]);
@@ -535,6 +536,9 @@ class Wheels_Elementor_Widget extends \Elementor\Widget_Base {
             $values[] = $term->name;
         }
 
+        // Sort naturally for numbers
+        sort($values, SORT_NATURAL);
+
         return $values;
     }
 
@@ -543,25 +547,60 @@ class Wheels_Elementor_Widget extends \Elementor\Widget_Base {
 
         $values = [];
 
-        // Get unique values from WooCommerce products with this ACF field
-        $meta_key = $field_name;
-
-        // Query to get all unique meta values for this field from products
+        // First try to get values from WooCommerce products
         $results = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT pm.meta_value
              FROM {$wpdb->postmeta} pm
              INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
              WHERE pm.meta_key = %s
              AND pm.meta_value != ''
+             AND pm.meta_value IS NOT NULL
              AND p.post_type = 'product'
              AND p.post_status = 'publish'
              ORDER BY pm.meta_value ASC",
-            $meta_key
+            $field_name
         ));
+
+        // If no results from products, try "tire-filters" or "tire_filters" custom post type
+        if (empty($results)) {
+            $results = $wpdb->get_col($wpdb->prepare(
+                "SELECT DISTINCT pm.meta_value
+                 FROM {$wpdb->postmeta} pm
+                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                 WHERE pm.meta_key = %s
+                 AND pm.meta_value != ''
+                 AND pm.meta_value IS NOT NULL
+                 AND p.post_type IN ('tire-filters', 'tire_filters', 'tire-filter', 'tire_filter')
+                 AND p.post_status = 'publish'
+                 ORDER BY pm.meta_value ASC",
+                $field_name
+            ));
+        }
+
+        // Also try product variations
+        if (empty($results)) {
+            $results = $wpdb->get_col($wpdb->prepare(
+                "SELECT DISTINCT pm.meta_value
+                 FROM {$wpdb->postmeta} pm
+                 INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+                 WHERE pm.meta_key = %s
+                 AND pm.meta_value != ''
+                 AND pm.meta_value IS NOT NULL
+                 AND p.post_type = 'product_variation'
+                 AND p.post_status = 'publish'
+                 ORDER BY pm.meta_value ASC",
+                $field_name
+            ));
+        }
 
         if (!empty($results)) {
             foreach ($results as $value) {
-                // Handle serialized arrays (ACF repeater/checkbox fields)
+                // Skip empty values
+                if (empty($value) || $value === '0') {
+                    continue;
+                }
+
+                // Handle serialized arrays (ACF checkbox/repeater fields)
                 if (is_serialized($value)) {
                     $unserialized = maybe_unserialize($value);
                     if (is_array($unserialized)) {
@@ -572,14 +611,60 @@ class Wheels_Elementor_Widget extends \Elementor\Widget_Base {
                         }
                     }
                 } else {
-                    $values[] = $value;
+                    if (!in_array($value, $values)) {
+                        $values[] = $value;
+                    }
                 }
             }
         }
 
-        // Sort values naturally (handles numbers properly)
+        // Sort values naturally (handles numbers like 195, 205, 215 properly)
         sort($values, SORT_NATURAL);
 
-        return array_unique($values);
+        return $values;
+    }
+
+    /**
+     * Get the post types where ACF fields are stored
+     * This helps debug where values are coming from
+     */
+    private function get_acf_field_source($field_name) {
+        global $wpdb;
+
+        $sources = [];
+
+        // Check products
+        $product_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT p.ID)
+             FROM {$wpdb->postmeta} pm
+             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE pm.meta_key = %s
+             AND pm.meta_value != ''
+             AND p.post_type = 'product'
+             AND p.post_status = 'publish'",
+            $field_name
+        ));
+
+        if ($product_count > 0) {
+            $sources['product'] = (int)$product_count;
+        }
+
+        // Check tire-filters CPT
+        $tire_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT p.ID)
+             FROM {$wpdb->postmeta} pm
+             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE pm.meta_key = %s
+             AND pm.meta_value != ''
+             AND p.post_type IN ('tire-filters', 'tire_filters', 'tire-filter', 'tire_filter')
+             AND p.post_status = 'publish'",
+            $field_name
+        ));
+
+        if ($tire_count > 0) {
+            $sources['tire-filters'] = (int)$tire_count;
+        }
+
+        return $sources;
     }
 }
