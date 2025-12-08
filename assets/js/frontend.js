@@ -136,63 +136,69 @@
         }
 
         goShopAction() {
-            const seasonSlug = this.elements.wheelsType ? this.elements.wheelsType.value : '';
-            const transportType = this.currentTransport || (this.elements.transportType ? this.elements.transportType.value : '');
-
-            // Get transport data for attribute info
-            const typeData = this.data.transportData ? this.data.transportData[transportType] : null;
-
-            // Build base URL - use shop URL or product category
+            // Always redirect to shop page with query parameters
             let baseUrl = this.data.shopUrl || this.data.baseUrl + '/shop/';
 
-            // If season is set as category slug, use product-category URL
-            if (seasonSlug) {
-                baseUrl = this.data.baseUrl + '/product-category/' + seasonSlug + '/';
-            }
+            // Make sure baseUrl ends without trailing slash for clean URL building
+            baseUrl = baseUrl.replace(/\/$/, '') + '/';
+
+            const transportType = this.currentTransport || (this.elements.transportType ? this.elements.transportType.value : '');
+            const typeData = this.data.transportData ? this.data.transportData[transportType] : null;
 
             // Create URL parameters
             const params = new URLSearchParams();
 
-            // Add filter parameters based on attribute type
+            // Add season/category as a meta parameter
+            const seasonSlug = this.elements.wheelsType ? this.elements.wheelsType.value : '';
+            if (seasonSlug) {
+                params.append('meta_season', seasonSlug);
+            }
+
+            // Add width parameter
             if (this.elements.widthCarInput && this.elements.widthCarInput.value) {
                 const paramName = this.getFilterParamName(typeData, 'width_attr', 'width');
                 params.append(paramName, this.elements.widthCarInput.value);
             }
 
+            // Add height parameter
             if (this.elements.heightCarInput && this.elements.heightCarInput.value) {
                 const paramName = this.getFilterParamName(typeData, 'height_attr', 'height');
                 params.append(paramName, this.elements.heightCarInput.value);
             }
 
+            // Add diameter/radius parameter
             if (this.elements.radiusCarInput && this.elements.radiusCarInput.value) {
                 const paramName = this.getFilterParamName(typeData, 'radius_attr', 'diameter');
                 params.append(paramName, this.elements.radiusCarInput.value);
             }
 
-            // Build final URL
+            // Add post_type for clarity
+            params.append('post_type', 'product');
+
+            // Build final URL: /shop/?meta_season=xxx&meta_width=yyy&post_type=product
             const queryString = params.toString();
             const finalUrl = baseUrl + (queryString ? '?' + queryString : '');
 
-            // Redirect
+            // Redirect to shop with filters
             window.location.href = finalUrl;
         }
 
         getFilterParamName(typeData, attrKey, defaultName) {
             if (!typeData || !typeData[attrKey]) {
-                return defaultName;
+                return 'meta_' + defaultName;
             }
 
             const attr = typeData[attrKey];
 
             if (attr.type === 'acf') {
-                // For ACF fields, use meta_ prefix for custom filtering
+                // For ACF fields, use meta_ prefix
                 return 'meta_' + attr.name;
             } else if (attr.type === 'wc') {
                 // For WooCommerce attributes, use filter_ prefix
                 return 'filter_' + attr.name.replace('pa_', '');
             }
 
-            return defaultName;
+            return 'meta_' + defaultName;
         }
     }
 
