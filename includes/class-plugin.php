@@ -26,7 +26,7 @@ final class Wheels_Elementor_Plugin {
     private function init_hooks() {
         add_action('elementor/init', [$this, 'init_elementor']);
         add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
-        add_action('plugins_loaded', [$this, 'load_plugin_textdomain']);
+        add_action('init', [$this, 'load_plugin_textdomain']);
     }
     
     public function init_elementor() {
