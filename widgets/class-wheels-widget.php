@@ -119,8 +119,8 @@ class Wheels_Elementor_Widget extends \Elementor\Widget_Base {
                 'tab' => \Elementor\Controls_Manager::TAB_CONTENT,
             ]
         );
-        
-        $attribute_options = $this->get_woocommerce_attributes();
+
+        $attribute_options = $this->get_all_attribute_options();
         $repeater = new \Elementor\Repeater();
         
         $repeater->add_control(
@@ -221,25 +221,65 @@ class Wheels_Elementor_Widget extends \Elementor\Widget_Base {
         $this->end_controls_section();
     }
     
-    private function get_woocommerce_attributes() {
+    private function get_all_attribute_options() {
         $attributes = ['' => __('Выберите атрибут', 'wheels-elementor-widgets')];
-        
+
+        // Add ACF fields section
+        $acf_fields = $this->get_acf_fields();
+        if (!empty($acf_fields)) {
+            foreach ($acf_fields as $field_name => $field_label) {
+                $attributes['acf_' . $field_name] = $field_label . ' (ACF: ' . $field_name . ')';
+            }
+        }
+
+        // Add WooCommerce attributes
         if (function_exists('wc_get_attribute_taxonomies')) {
             $wc_attributes = wc_get_attribute_taxonomies();
             foreach ($wc_attributes as $attribute) {
                 $taxonomy_name = 'pa_' . $attribute->attribute_name;
-                $attributes[$taxonomy_name] = $attribute->attribute_label . ' (pa_' . $attribute->attribute_name . ')';
+                $attributes[$taxonomy_name] = $attribute->attribute_label . ' (WC: pa_' . $attribute->attribute_name . ')';
             }
         }
-        
-        // Если нет атрибутов WooCommerce, добавляем тестовые
+
+        // Fallback options if nothing found
         if (count($attributes) === 1) {
-            $attributes['pa_width'] = __('Ширина (pa_width)', 'wheels-elementor-widgets');
-            $attributes['pa_height'] = __('Высота (pa_height)', 'wheels-elementor-widgets');
-            $attributes['pa_diameter'] = __('Диаметр (pa_diameter)', 'wheels-elementor-widgets');
+            $attributes['acf_season'] = __('Season (ACF: season)', 'wheels-elementor-widgets');
+            $attributes['acf_width'] = __('Width (ACF: width)', 'wheels-elementor-widgets');
+            $attributes['acf_diameter'] = __('Diameter (ACF: diameter)', 'wheels-elementor-widgets');
         }
-        
+
         return $attributes;
+    }
+
+    private function get_acf_fields() {
+        $fields = [];
+
+        // Check if ACF is active
+        if (!function_exists('acf_get_field_groups')) {
+            // Fallback: return common field names for Tire Filters
+            return [
+                'season' => __('Season', 'wheels-elementor-widgets'),
+                'width' => __('Width', 'wheels-elementor-widgets'),
+                'diameter' => __('Diameter', 'wheels-elementor-widgets'),
+            ];
+        }
+
+        // Get all ACF field groups
+        $field_groups = acf_get_field_groups();
+
+        foreach ($field_groups as $group) {
+            $group_fields = acf_get_fields($group['key']);
+            if ($group_fields) {
+                foreach ($group_fields as $field) {
+                    // Only include select, text, number fields that make sense for filtering
+                    if (in_array($field['type'], ['select', 'text', 'number', 'radio', 'checkbox'])) {
+                        $fields[$field['name']] = $field['label'];
+                    }
+                }
+            }
+        }
+
+        return $fields;
     }
     
     protected function render() {
@@ -407,55 +447,139 @@ class Wheels_Elementor_Widget extends \Elementor\Widget_Base {
     }
     
     private function output_js_data($settings) {
-        // Подготавливаем данные для всех типов транспорта
+        // Prepare data for all transport types
         $transport_data = [];
         foreach ($settings['transport_types'] as $type) {
             $transport_slug = $type['transport_slug'];
-            
+
+            // Get attribute info (type and clean name)
+            $width_attr = $this->parse_attribute($type['width_attribute']);
+            $height_attr = $this->parse_attribute($type['height_attribute']);
+            $radius_attr = $this->parse_attribute($type['radius_attribute']);
+
             $transport_data[$transport_slug] = [
                 'width_values' => $this->get_attribute_values($type['width_attribute']),
                 'height_values' => $this->get_attribute_values($type['height_attribute']),
                 'radius_values' => $this->get_attribute_values($type['radius_attribute']),
+                'width_attr' => $width_attr,
+                'height_attr' => $height_attr,
+                'radius_attr' => $radius_attr,
             ];
         }
-        
+
         $js_data = [
             'transportData' => $transport_data,
             'baseUrl' => get_site_url(),
+            'shopUrl' => function_exists('wc_get_page_permalink') ? wc_get_page_permalink('shop') : get_site_url() . '/shop/',
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('wheels_filter_nonce'),
         ];
-        
+
         ?>
         <script type="text/javascript">
             window.wheelsWidgetData = <?php echo wp_json_encode($js_data); ?>;
         </script>
         <?php
     }
+
+    private function parse_attribute($attribute) {
+        if (empty($attribute)) {
+            return ['type' => '', 'name' => ''];
+        }
+
+        if (strpos($attribute, 'acf_') === 0) {
+            return [
+                'type' => 'acf',
+                'name' => substr($attribute, 4)
+            ];
+        }
+
+        if (strpos($attribute, 'pa_') === 0) {
+            return [
+                'type' => 'wc',
+                'name' => $attribute
+            ];
+        }
+
+        return ['type' => 'unknown', 'name' => $attribute];
+    }
     
     private function get_attribute_values($attribute) {
         if (empty($attribute)) {
             return [];
         }
-        
+
+        // Check if it's an ACF field
+        if (strpos($attribute, 'acf_') === 0) {
+            return $this->get_acf_field_values(substr($attribute, 4));
+        }
+
+        // WooCommerce taxonomy attribute
         if (!taxonomy_exists($attribute)) {
             return [];
         }
-        
+
         $terms = get_terms([
             'taxonomy' => $attribute,
             'hide_empty' => false,
             'orderby' => 'name',
             'order' => 'ASC'
         ]);
-        
+
         if (is_wp_error($terms) || empty($terms)) {
             return [];
         }
-        
+
         $values = [];
         foreach ($terms as $term) {
             $values[] = $term->name;
         }
-        
+
         return $values;
+    }
+
+    private function get_acf_field_values($field_name) {
+        global $wpdb;
+
+        $values = [];
+
+        // Get unique values from WooCommerce products with this ACF field
+        $meta_key = $field_name;
+
+        // Query to get all unique meta values for this field from products
+        $results = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT pm.meta_value
+             FROM {$wpdb->postmeta} pm
+             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE pm.meta_key = %s
+             AND pm.meta_value != ''
+             AND p.post_type = 'product'
+             AND p.post_status = 'publish'
+             ORDER BY pm.meta_value ASC",
+            $meta_key
+        ));
+
+        if (!empty($results)) {
+            foreach ($results as $value) {
+                // Handle serialized arrays (ACF repeater/checkbox fields)
+                if (is_serialized($value)) {
+                    $unserialized = maybe_unserialize($value);
+                    if (is_array($unserialized)) {
+                        foreach ($unserialized as $v) {
+                            if (!empty($v) && !in_array($v, $values)) {
+                                $values[] = $v;
+                            }
+                        }
+                    }
+                } else {
+                    $values[] = $value;
+                }
+            }
+        }
+
+        // Sort values naturally (handles numbers properly)
+        sort($values, SORT_NATURAL);
+
+        return array_unique($values);
     }
 }

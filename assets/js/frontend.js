@@ -1,17 +1,19 @@
 (function($) {
     'use strict';
-    
+
     class WheelsWidget {
         constructor() {
             this.data = window.wheelsWidgetData || {};
+            this.currentTransport = null;
             this.init();
         }
-        
+
         init() {
             this.cacheElements();
             this.bindEvents();
+            this.setInitialTransport();
         }
-        
+
         cacheElements() {
             this.elements = {
                 wheelsType: document.getElementById('wheels-type'),
@@ -23,118 +25,183 @@
                 wheelsWrapper: document.querySelector('.wheels-wrapper')
             };
         }
-        
+
         bindEvents() {
-            // Клики по типам транспорта
+            // Transport type clicks
             document.querySelectorAll('.type-action').forEach(element => {
                 element.addEventListener('click', () => {
                     this.changeTransportType(element.dataset.type, element.dataset.image);
                 });
             });
-            
-            // Клики по сезонам
+
+            // Season clicks
             document.querySelectorAll('.season-type').forEach(element => {
                 element.addEventListener('click', () => {
                     this.changeWheelsType(element.dataset.season);
                 });
             });
-            
-            // Кнопка поиска
-            this.elements.letsFindButton.addEventListener('click', () => {
-                this.goShopAction();
-            });
+
+            // Search button
+            if (this.elements.letsFindButton) {
+                this.elements.letsFindButton.addEventListener('click', () => {
+                    this.goShopAction();
+                });
+            }
         }
-        
+
+        setInitialTransport() {
+            if (this.elements.transportType && this.elements.transportType.value) {
+                this.currentTransport = this.elements.transportType.value;
+            }
+        }
+
         changeTransportType(typeValue, imageUrl) {
-            // Обновляем активный класс
+            // Update active class
             document.querySelectorAll('.type-action').forEach(el => {
                 el.classList.remove('wheels-active');
             });
-            document.querySelector(`[data-type="${typeValue}"]`).classList.add('wheels-active');
-            
-            // Обновляем скрытый select
-            this.elements.transportType.value = typeValue;
-            
-            // Обновляем фоновое изображение
+            const activeEl = document.querySelector(`[data-type="${typeValue}"]`);
+            if (activeEl) {
+                activeEl.classList.add('wheels-active');
+            }
+
+            // Update hidden select
+            if (this.elements.transportType) {
+                this.elements.transportType.value = typeValue;
+            }
+
+            // Update current transport
+            this.currentTransport = typeValue;
+
+            // Update background image
             if (imageUrl && this.elements.wheelsWrapper) {
                 this.elements.wheelsWrapper.style.backgroundImage = `url('${imageUrl}')`;
             }
-            
-            // Обновляем параметры
+
+            // Update parameters
             this.updateParameters(typeValue);
         }
-        
+
         changeWheelsType(seasonValue) {
-            // Обновляем активный класс
+            // Update active class
             document.querySelectorAll('.season-type').forEach(el => {
                 el.classList.remove('wheels-active');
             });
-            document.querySelector(`[data-season="${seasonValue}"]`).classList.add('wheels-active');
-            
-            // Обновляем скрытый select
-            this.elements.wheelsType.value = seasonValue;
+            const activeEl = document.querySelector(`[data-season="${seasonValue}"]`);
+            if (activeEl) {
+                activeEl.classList.add('wheels-active');
+            }
+
+            // Update hidden select
+            if (this.elements.wheelsType) {
+                this.elements.wheelsType.value = seasonValue;
+            }
         }
-        
+
         updateParameters(transportType) {
-            const typeData = this.data.transportData[transportType];
+            const typeData = this.data.transportData ? this.data.transportData[transportType] : null;
             if (!typeData) return;
-            
+
             this.updateSelect(this.elements.widthCarInput, typeData.width_values || []);
             this.updateSelect(this.elements.heightCarInput, typeData.height_values || []);
             this.updateSelect(this.elements.radiusCarInput, typeData.radius_values || []);
         }
-        
+
         updateSelect(select, options) {
+            if (!select) return;
+
             const currentValue = select.value;
-            
-            // Очищаем select
-            select.innerHTML = '<option value="">Выберите значение</option>';
-            
-            // Добавляем новые options
+
+            // Clear select
+            select.innerHTML = '';
+
+            // Add placeholder option
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'Select value';
+            select.appendChild(placeholder);
+
+            // Add new options
             options.forEach(value => {
                 const option = document.createElement('option');
                 option.value = value;
                 option.textContent = value;
                 select.appendChild(option);
             });
-            
-            // Восстанавливаем значение, если оно есть в новых options
+
+            // Restore value if it exists in new options
             if (options.includes(currentValue)) {
                 select.value = currentValue;
             }
         }
-        
+
         goShopAction() {
-            const seasonSlug = this.elements.wheelsType.value;
-            
-            // Формируем базовый URL
-            let baseUrl = this.data.baseUrl + '/product-category/' + seasonSlug + '/';
-            
-            // Создаем URL параметры
+            const seasonSlug = this.elements.wheelsType ? this.elements.wheelsType.value : '';
+            const transportType = this.currentTransport || (this.elements.transportType ? this.elements.transportType.value : '');
+
+            // Get transport data for attribute info
+            const typeData = this.data.transportData ? this.data.transportData[transportType] : null;
+
+            // Build base URL - use shop URL or product category
+            let baseUrl = this.data.shopUrl || this.data.baseUrl + '/shop/';
+
+            // If season is set as category slug, use product-category URL
+            if (seasonSlug) {
+                baseUrl = this.data.baseUrl + '/product-category/' + seasonSlug + '/';
+            }
+
+            // Create URL parameters
             const params = new URLSearchParams();
 
-            // Добавляем параметры размеров
-            if (this.elements.widthCarInput.value) {
-                params.append('reifenbreite', this.elements.widthCarInput.value);
+            // Add filter parameters based on attribute type
+            if (this.elements.widthCarInput && this.elements.widthCarInput.value) {
+                const paramName = this.getFilterParamName(typeData, 'width_attr', 'width');
+                params.append(paramName, this.elements.widthCarInput.value);
             }
-            if (this.elements.heightCarInput.value) {
-                params.append('reifenquerschnitt', this.elements.heightCarInput.value);
+
+            if (this.elements.heightCarInput && this.elements.heightCarInput.value) {
+                const paramName = this.getFilterParamName(typeData, 'height_attr', 'height');
+                params.append(paramName, this.elements.heightCarInput.value);
             }
-            if (this.elements.radiusCarInput.value) {
-                params.append('zollgroße', this.elements.radiusCarInput.value);
+
+            if (this.elements.radiusCarInput && this.elements.radiusCarInput.value) {
+                const paramName = this.getFilterParamName(typeData, 'radius_attr', 'diameter');
+                params.append(paramName, this.elements.radiusCarInput.value);
             }
-            
-            // Формируем финальный URL
-            const finalUrl = baseUrl + (params.toString() ? '?' + params.toString() : '');
-            
-            // Перенаправляем
+
+            // Build final URL
+            const queryString = params.toString();
+            const finalUrl = baseUrl + (queryString ? '?' + queryString : '');
+
+            // Redirect
             window.location.href = finalUrl;
         }
+
+        getFilterParamName(typeData, attrKey, defaultName) {
+            if (!typeData || !typeData[attrKey]) {
+                return defaultName;
+            }
+
+            const attr = typeData[attrKey];
+
+            if (attr.type === 'acf') {
+                // For ACF fields, use meta_ prefix for custom filtering
+                return 'meta_' + attr.name;
+            } else if (attr.type === 'wc') {
+                // For WooCommerce attributes, use filter_ prefix
+                return 'filter_' + attr.name.replace('pa_', '');
+            }
+
+            return defaultName;
+        }
     }
-    
-    // Инициализация при загрузке DOM
+
+    // Initialize on DOM load
     document.addEventListener('DOMContentLoaded', function() {
-        new WheelsWidget();
+        // Check if widget exists on page
+        if (document.querySelector('.wheels-wrapper')) {
+            new WheelsWidget();
+        }
     });
-    
+
 })(jQuery);

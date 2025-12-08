@@ -27,6 +27,10 @@ final class Wheels_Elementor_Plugin {
         add_action('elementor/init', [$this, 'init_elementor']);
         add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
         add_action('init', [$this, 'load_plugin_textdomain']);
+
+        // Add WooCommerce filter for ACF meta queries
+        add_action('woocommerce_product_query', [$this, 'filter_products_by_acf_meta']);
+        add_filter('woocommerce_product_query_meta_query', [$this, 'add_acf_meta_query'], 10, 2);
     }
     
     public function init_elementor() {
@@ -70,5 +74,78 @@ final class Wheels_Elementor_Plugin {
             false,
             dirname(plugin_basename(WHEELS_ELEMENTOR_PLUGIN_FILE)) . '/languages/'
         );
+    }
+
+    /**
+     * Filter products by ACF meta values from URL parameters
+     */
+    public function filter_products_by_acf_meta($query) {
+        if (is_admin() || !$query->is_main_query()) {
+            return;
+        }
+
+        // Get all meta_ parameters from URL
+        $meta_params = $this->get_meta_params_from_url();
+
+        if (empty($meta_params)) {
+            return;
+        }
+
+        $meta_query = $query->get('meta_query');
+        if (!is_array($meta_query)) {
+            $meta_query = [];
+        }
+
+        foreach ($meta_params as $key => $value) {
+            $meta_query[] = [
+                'key' => $key,
+                'value' => $value,
+                'compare' => '='
+            ];
+        }
+
+        $query->set('meta_query', $meta_query);
+    }
+
+    /**
+     * Add ACF meta query to WooCommerce product query
+     */
+    public function add_acf_meta_query($meta_query, $query) {
+        $meta_params = $this->get_meta_params_from_url();
+
+        if (empty($meta_params)) {
+            return $meta_query;
+        }
+
+        if (!is_array($meta_query)) {
+            $meta_query = [];
+        }
+
+        foreach ($meta_params as $key => $value) {
+            $meta_query[] = [
+                'key' => $key,
+                'value' => $value,
+                'compare' => '='
+            ];
+        }
+
+        return $meta_query;
+    }
+
+    /**
+     * Extract meta_ parameters from URL
+     */
+    private function get_meta_params_from_url() {
+        $meta_params = [];
+
+        foreach ($_GET as $key => $value) {
+            // Check for meta_ prefix (ACF fields)
+            if (strpos($key, 'meta_') === 0 && !empty($value)) {
+                $field_name = substr($key, 5); // Remove 'meta_' prefix
+                $meta_params[$field_name] = sanitize_text_field($value);
+            }
+        }
+
+        return $meta_params;
     }
 }
