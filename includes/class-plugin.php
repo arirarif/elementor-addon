@@ -4,46 +4,39 @@ if (!defined('ABSPATH')) {
 }
 
 final class Wheels_Elementor_Plugin {
-    
+
     private static $_instance = null;
-    
+
     public static function instance() {
         if (is_null(self::$_instance)) {
             self::$_instance = new self();
         }
         return self::$_instance;
     }
-    
+
     private function __construct() {
         $this->includes();
         $this->init_hooks();
     }
-    
+
     private function includes() {
         require_once WHEELS_ELEMENTOR_PLUGIN_PATH . 'includes/class-widget-loader.php';
     }
-    
+
     private function init_hooks() {
         add_action('elementor/init', [$this, 'init_elementor']);
         add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
         add_action('init', [$this, 'load_plugin_textdomain']);
 
-        // Add WooCommerce filter for ACF meta queries
-        add_action('woocommerce_product_query', [$this, 'filter_products_by_acf_meta']);
-        add_filter('woocommerce_product_query_meta_query', [$this, 'add_acf_meta_query'], 10, 2);
-
-        // Also handle filter_ prefix for WooCommerce attribute filtering
-        add_filter('woocommerce_product_query_tax_query', [$this, 'add_attribute_tax_query'], 10, 2);
+        // Filter products by ACF meta values
+        add_action('pre_get_posts', [$this, 'filter_products_by_meta'], 20);
     }
-    
+
     public function init_elementor() {
-        // Добавляем категорию виджетов
         add_action('elementor/elements/categories_registered', [$this, 'add_widget_category']);
-        
-        // Регистрируем виджеты
         Wheels_Elementor_Widget_Loader::instance();
     }
-    
+
     public function add_widget_category($elements_manager) {
         $elements_manager->add_category(
             'wheels-category',
@@ -53,7 +46,7 @@ final class Wheels_Elementor_Plugin {
             ]
         );
     }
-    
+
     public function enqueue_frontend_assets() {
         wp_enqueue_style(
             'wheels-elementor-frontend',
@@ -61,16 +54,16 @@ final class Wheels_Elementor_Plugin {
             [],
             WHEELS_ELEMENTOR_VERSION
         );
-        
+
         wp_enqueue_script(
             'wheels-elementor-frontend',
             WHEELS_ELEMENTOR_PLUGIN_URL . 'assets/js/frontend.js',
-            ['jquery'],
+            [],
             WHEELS_ELEMENTOR_VERSION,
             true
         );
     }
-    
+
     public function load_plugin_textdomain() {
         load_plugin_textdomain(
             'wheels-elementor-widgets',
@@ -80,185 +73,72 @@ final class Wheels_Elementor_Plugin {
     }
 
     /**
-     * Filter products by ACF meta values from URL parameters
+     * Filter products by meta_ URL parameters
      */
-    public function filter_products_by_acf_meta($query) {
-        if (is_admin() || !$query->is_main_query()) {
+    public function filter_products_by_meta($query) {
+        // Only run on frontend, main query, and shop/product pages
+        if (is_admin()) {
             return;
         }
 
-        // Get all meta_ parameters from URL
-        $meta_params = $this->get_meta_params_from_url();
+        if (!$query->is_main_query()) {
+            return;
+        }
+
+        // Check if we're on shop page or product archive
+        if (!is_shop() && !is_product_category() && !is_product_tag()) {
+            // Also check post_type parameter
+            if (!isset($_GET['post_type']) || $_GET['post_type'] !== 'product') {
+                return;
+            }
+        }
+
+        // Get meta parameters from URL
+        $meta_params = $this->get_meta_params();
 
         if (empty($meta_params)) {
             return;
         }
 
+        // Build meta query
         $meta_query = $query->get('meta_query');
         if (!is_array($meta_query)) {
             $meta_query = [];
         }
 
-        // Set relation to AND - all conditions must match
-        $meta_query['relation'] = 'AND';
-
         foreach ($meta_params as $key => $value) {
-            // Try multiple comparison methods for flexibility
             $meta_query[] = [
-                'relation' => 'OR',
-                [
-                    'key' => $key,
-                    'value' => $value,
-                    'compare' => '='
-                ],
-                [
-                    'key' => $key,
-                    'value' => $value,
-                    'compare' => 'LIKE'
-                ]
+                'key' => $key,
+                'value' => $value,
+                'compare' => '='
             ];
+        }
+
+        // Set relation if multiple conditions
+        if (count($meta_params) > 1) {
+            $meta_query['relation'] = 'AND';
         }
 
         $query->set('meta_query', $meta_query);
+
+        // Make sure we're querying products
+        $query->set('post_type', 'product');
     }
 
     /**
-     * Add ACF meta query to WooCommerce product query
+     * Get meta_ parameters from URL
      */
-    public function add_acf_meta_query($meta_query, $query) {
-        $meta_params = $this->get_meta_params_from_url();
-
-        if (empty($meta_params)) {
-            return $meta_query;
-        }
-
-        if (!is_array($meta_query)) {
-            $meta_query = [];
-        }
-
-        // Set relation to AND - all conditions must match
-        $meta_query['relation'] = 'AND';
-
-        foreach ($meta_params as $key => $value) {
-            // Try multiple comparison methods for flexibility
-            $meta_query[] = [
-                'relation' => 'OR',
-                [
-                    'key' => $key,
-                    'value' => $value,
-                    'compare' => '='
-                ],
-                [
-                    'key' => $key,
-                    'value' => $value,
-                    'compare' => 'LIKE'
-                ]
-            ];
-        }
-
-        return $meta_query;
-    }
-
-    /**
-     * Extract meta_ parameters from URL
-     */
-    private function get_meta_params_from_url() {
+    private function get_meta_params() {
         $meta_params = [];
 
         foreach ($_GET as $key => $value) {
-            // Check for meta_ prefix (ACF fields)
             if (strpos($key, 'meta_') === 0 && !empty($value)) {
-                $field_name = substr($key, 5); // Remove 'meta_' prefix
+                // Remove 'meta_' prefix to get the actual field name
+                $field_name = substr($key, 5);
                 $meta_params[$field_name] = sanitize_text_field($value);
             }
         }
 
         return $meta_params;
-    }
-
-    /**
-     * Add WooCommerce attribute taxonomy query for filter_ parameters
-     */
-    public function add_attribute_tax_query($tax_query, $query) {
-        $filter_params = $this->get_filter_params_from_url();
-
-        if (empty($filter_params)) {
-            return $tax_query;
-        }
-
-        if (!is_array($tax_query)) {
-            $tax_query = [];
-        }
-
-        foreach ($filter_params as $attribute => $value) {
-            $taxonomy = 'pa_' . $attribute;
-
-            // Check if this taxonomy exists
-            if (!taxonomy_exists($taxonomy)) {
-                continue;
-            }
-
-            // Find term by name or slug
-            $term = get_term_by('name', $value, $taxonomy);
-            if (!$term) {
-                $term = get_term_by('slug', sanitize_title($value), $taxonomy);
-            }
-
-            if ($term) {
-                $tax_query[] = [
-                    'taxonomy' => $taxonomy,
-                    'field' => 'term_id',
-                    'terms' => [$term->term_id],
-                    'operator' => 'IN'
-                ];
-            }
-        }
-
-        if (count($filter_params) > 0) {
-            $tax_query['relation'] = 'AND';
-        }
-
-        return $tax_query;
-    }
-
-    /**
-     * Extract filter_ parameters from URL (for WooCommerce attributes)
-     */
-    private function get_filter_params_from_url() {
-        $filter_params = [];
-
-        foreach ($_GET as $key => $value) {
-            // Check for filter_ prefix (WooCommerce attributes)
-            if (strpos($key, 'filter_') === 0 && !empty($value)) {
-                $attribute_name = substr($key, 7); // Remove 'filter_' prefix
-                $filter_params[$attribute_name] = sanitize_text_field($value);
-            }
-        }
-
-        return $filter_params;
-    }
-
-    /**
-     * Debug helper - add to URL: ?wheels_debug=1 to see available meta keys
-     */
-    public function debug_product_meta() {
-        if (!isset($_GET['wheels_debug']) || !current_user_can('manage_options')) {
-            return;
-        }
-
-        global $wpdb;
-
-        // Get all meta keys used on products
-        $meta_keys = $wpdb->get_col(
-            "SELECT DISTINCT pm.meta_key
-             FROM {$wpdb->postmeta} pm
-             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
-             WHERE p.post_type = 'product'
-             AND p.post_status = 'publish'
-             AND pm.meta_key NOT LIKE '\_%'
-             ORDER BY pm.meta_key ASC"
-        );
-
-        echo '<pre>Available product meta keys: ' . print_r($meta_keys, true) . '</pre>';
     }
 }
